@@ -1,0 +1,59 @@
+<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>画像のデジタル化君</title><style>
+*{box-sizing:border-box}body{margin:0;background:#edf3f0;color:#153b33;font:16px/1.6 system-ui,sans-serif}main{max-width:900px;margin:auto;padding:clamp(12px,4vw,38px)}h1{font-size:clamp(24px,5vw,38px);margin:0}p{margin:.35em 0 1em}.bar,article{background:white;border:1px solid #bdcfc6;border-radius:14px;padding:clamp(8px,2vw,18px)}.bar{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:12px 0}section{display:grid;grid-template-columns:1fr 1fr;gap:10px}article{min-width:0}h2{margin:0 0 8px;font-size:18px}canvas{display:block;width:100%;height:auto;border:1px solid #8aa99c;image-rendering:pixelated}#original{touch-action:none;cursor:crosshair}strong{display:block;font-size:clamp(16px,3vw,26px)}button,select{font:inherit;padding:5px;border-radius:6px}input{vertical-align:middle;accent-color:#15715b}summary{cursor:pointer}small{color:#456054}footer{display:flex;gap:18px;flex-wrap:wrap;margin-top:24px;font-size:13px}a{color:#146c65}dialog{width:min(90%,640px);max-height:85vh;overflow:auto;border:1px solid #bdcfc6;border-radius:14px;padding:24px;color:#153b33}dialog::backdrop{background:#153b3366}dialog pre{white-space:pre-wrap;font:13px/1.8 system-ui,sans-serif}button,a{touch-action:manipulation}button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #d28d20;outline-offset:3px}@media(max-width:480px){section{gap:6px}h2{font-size:15px}article small{font-size:11px}.bar{gap:10px}} </style>
+<main><h1>画像のデジタル化君</h1><p>左に絵を描き、右の画像の色と解像度を変えてみよう。</p>
+<div class="bar"><label>ペンの色 <input id="color" type="color" value="#146c94"></label><output id="rgb"></output><button id="undo">元に戻す</button><button id="clear">全消去</button></div>
+<section><article><h2>元の画像</h2><canvas id="original" width="256" height="256" aria-label="お絵描き欄"></canvas><small>256 × 256 px ／ 65,536 画素<br>カラー・24 bit/画素</small><strong>196,608 B</strong></article>
+<article><h2>加工後の画像</h2><canvas id="result" aria-label="加工後の画像"></canvas><small id="stats"></small><strong id="size"></strong><output id="ratio"></output></article></section>
+<div class="bar"><label>色の表し方 <select id="mode"><option value="24">カラー</option><option value="8">グレースケール</option><option value="1">モノクロ（白黒2値）</option></select></label><label>解像度 <input id="level" type="range" min="3" max="8" value="6"> <output id="dimensions"></output></label></div>
+<p>画素データ量（B）＝ 横の画素数 × 縦の画素数 × 1画素あたりのビット数 ÷ 8<br><small>圧縮前の画素データだけを計算しています。グレースケールは256階調、カラーはRGB各256階調です。</small></p>
+<p><small>画像は外部に送信されません。表示するデータ量は、ファイル形式の付加情報・圧縮・透過情報を含まない理論値です。</small></p><footer><span>© 2026 Takakura Kentaro</span><a href="#licenseDialog" id="license">ライセンス・免責事項</a><a href="#" id="downloadApp">HTMLをダウンロード</a><a href="https://github.com/ken-tak-steam/img_digital_kun" target="_blank" rel="noopener noreferrer">GitHub ↗</a></footer><dialog id="licenseDialog" aria-labelledby="licenseTitle"><button id="closeLicense" style="float:right">閉じる</button><h2 id="licenseTitle">ライセンス・免責事項</h2><pre>Copyright (c) 2026 Takakura Kentaro
+All rights reserved except as expressly permitted below.
+
+本ソフトウェアの著作権は、著作者に帰属します。
+以下の条件を満たす場合、本ソフトウェアの使用、複製、改変および再配布を無償で許可します。
+
+1. 著作者表示
+再配布・改変版の公開時には、原著作者名、出典URLおよび本ライセンスを明示してください。
+
+2. 非商用利用
+本ソフトウェア自体の販売、商用製品への組み込み、その他の営利目的での利用は禁止します。
+ただし、学校教育、有料・無料の講習会、研修会で教材として利用することは認めます。
+
+3. 改変・再配布
+改変および再配布を認めます。改変した場合は、その旨を明示してください。
+
+4. 免責事項
+本ソフトウェアは現状有姿で提供されます。著作者は、使用によって生じた損害について、法令で認められる範囲で責任を負いません。
+
+出典URL: https://github.com/ken-tak-steam/img_digital_kun
+画像のデジタル化君
+</pre><a href="https://github.com/ken-tak-steam/img_digital_kun" target="_blank" rel="noopener noreferrer">GitHub（ソースコード）↗</a></dialog></main>
+<script>
+const ORIGINAL_SOURCE='<!doctype html>\n'+document.documentElement.outerHTML;
+const el=id=>document.getElementById(id);
+const source=el('original'), ctx=source.getContext('2d',{willReadFrequently:true}), target=el('result'), out=target.getContext('2d',{willReadFrequently:true});
+const historyStack=[];
+let active=null,last;
+function save(){if(historyStack.length>=20)historyStack.shift();historyStack.push(ctx.getImageData(0,0,256,256));el('undo').disabled=false}
+function white(){ctx.fillStyle='white';ctx.fillRect(0,0,256,256)}
+function render(){
+ const n=2**Number(el('level').value), bits=Number(el('mode').value), pixels=n*n, bytes=pixels*bits/8;
+ target.width=target.height=n;out.drawImage(source,0,0,n,n);
+ if(bits!==24){const frame=out.getImageData(0,0,n,n), data=frame.data;
+ for(let i=0;i<data.length;i+=4){const light=Math.round(.299*data[i]+.587*data[i+1]+.114*data[i+2]);data[i]=data[i+1]=data[i+2]=bits===8?light:(light>=128?255:0)}out.putImageData(frame,0,0)}
+ el('dimensions').textContent=n+' × '+n;
+ el('stats').innerHTML=n+' × '+n+' px ／ '+pixels.toLocaleString()+' 画素<br>'+bits+' bit/画素';
+ el('size').textContent=bytes.toLocaleString()+' B';el('ratio').textContent='元の '+(100*bytes/196608).toLocaleString('ja',{maximumSignificantDigits:3})+' %';
+}
+function showColor(){const hex=el('color').value;const [r,g,b]=hex.slice(1).match(/../g).map(v=>parseInt(v,16));el('rgb').textContent=hex.toUpperCase()+'　R '+r+'　G '+g+'　B '+b}
+function point(e){const box=source.getBoundingClientRect();return [(e.clientX-box.left-source.clientLeft)*256/source.clientWidth,(e.clientY-box.top-source.clientTop)*256/source.clientHeight]}
+source.onpointerdown=e=>{if(active!==null||e.button!==0)return;save();active=e.pointerId;source.setPointerCapture(active);last=point(e);ctx.fillStyle=ctx.strokeStyle=el('color').value;ctx.lineWidth=5;ctx.lineCap='round';ctx.beginPath();ctx.arc(...last,2.5,0,Math.PI*2);ctx.fill();render()};
+source.onpointermove=e=>{if(active!==e.pointerId)return;const next=point(e);ctx.beginPath();ctx.moveTo(...last);ctx.lineTo(...next);ctx.stroke();last=next;render()};
+source.onpointerup=source.onpointercancel=source.onlostpointercapture=()=>active=null;
+el('undo').onclick=()=>{if(historyStack.length)ctx.putImageData(historyStack.pop(),0,0);el('undo').disabled=!historyStack.length;render()};
+el('clear').onclick=()=>{save();white();render()};el('mode').onchange=el('level').oninput=render;el('color').oninput=showColor;
+el('license').onclick=e=>{e.preventDefault();el('licenseDialog').showModal()};
+el('closeLicense').onclick=()=>el('licenseDialog').close();
+el('downloadApp').onclick=e=>{e.preventDefault();if(!confirm('「img_digital_kun.html」をダウンロードしますか？'))return;const url=URL.createObjectURL(new Blob([ORIGINAL_SOURCE],{type:'text/html;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='img_digital_kun.html';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000)};
+el('undo').disabled=true;white();showColor();render();
+</script></html>
